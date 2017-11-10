@@ -1,0 +1,28 @@
+name:                hexchat
+version:             0.0.0.0
+synopsis:            Haskell scripting interface for HexChat
+description:         
+license:             MIT
+license-file:        LICENSE
+author:              mniip
+maintainer:          mniip@mniip.com
+copyright:           (C) 2017 mniip
+category:            System
+build-type:          Simple
+extra-source-files:  ChangeLog.md
+cabal-version:       >=2.0
+
+library
+  exposed-modules:     HexChat, HexChat.Internal
+  other-extensions:    CApiFFI
+  build-depends:       base >=4.10 && <4.11, containers >=0.5 && <0.6
+  default-language:    Haskell2010
+
+foreign-library haskell
+  type:                native-shared
+  hs-source-dirs:      plugin
+  c-sources:           plugin/plugin.c
+  other-modules:       HexChat.Linker
+  other-extensions:    CApiFFI
+  build-depends:       base >=4.10 && <4.11, deepseq >= 1.0 && < 1.5, ghc-prim >=0.5 && <0.6, ghc-paths >=0.1 && <0.2, ghc >= 8.0 && < 8.3, ghci >= 8.0 && < 8.3, hexchat == 0.0.0.0
+  default-language:    Haskell2010
