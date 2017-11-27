@@ -1,5 +1,16 @@
 {-# LANGUAGE CApiFFI #-}
 {-# OPTIONS_GHC -fno-warn-tabs #-}
+{-|
+Module      : HexChat.Internal
+Description : HexChat scripting interface
+Copyright   : (C) 2017 mniip
+License     : MIT
+Maintainer  : mniip@mniip.com
+Stability   : none
+Portability : none
+
+This module contains the "raw" functions that leak the fact that all Haskell scripts are actually executed under the same @hexchat_plugin@ structure. You should unhook everything you have hooked.
+-}
 
 module HexChat.Internal
 	(
@@ -64,8 +75,10 @@ import System.IO.Unsafe
 data HexChat_Plugin
 newtype Plugin = Plugin (Ptr HexChat_Plugin) deriving (Show, Eq, Ord)
 data HexChat_Hook
+-- | An opaque type referencing a particular hook. Can be passed to 'HexChat.unhook'.
 newtype Hook = Hook (Ptr HexChat_Hook) deriving (Show, Eq, Ord)
 data HexChat_Context
+-- | An opaque type referencing a context (tab or window).
 newtype Context = Context (Ptr HexChat_Context) deriving (Show, Eq, Ord)
 data HexChat_List
 data List = List (IORef Bool) (ForeignPtr HexChat_List) deriving (Eq)
@@ -157,7 +170,12 @@ foreign import capi "&hexchat_event_attrs_free" ptr_finalize_attrs :: FunPtr (Pl
 foreign import capi "&hexchat_list_free" ptr_finalize_list :: FunPtr (Plugin -> Ptr HexChat_List -> IO ())
 
 
-data Eat = EatNone | EatHexChat | EatPlugin | EatAll deriving (Show, Read, Eq)
+-- | This type defines whether the current hook "consumes" the event or lets other hooks know about it.
+data Eat = EatNone -- ^ Pass the event to everything else.
+	| EatHexChat -- ^ Pass the event to all other scripts but not HexChat.
+	| EatPlugin -- ^ Pass the event to HexChat but not any other scripts.
+	| EatAll -- ^ Completely consume the event.
+	deriving (Show, Read, Eq)
 
 fromEat :: Eat -> CInt
 fromEat EatNone = eat_NONE
@@ -165,6 +183,7 @@ fromEat EatHexChat = eat_HEXCHAT
 fromEat EatPlugin = eat_PLUGIN
 fromEat EatAll = eat_ALL
 
+-- | Event attributes.
 data EventAttrs = EventAttrs { server_time_utc :: CTime } deriving (Show, Read, Eq)
 
 fromAttrs :: Plugin -> EventAttrs -> IO (ForeignPtr HexChat_EventAttrs)
