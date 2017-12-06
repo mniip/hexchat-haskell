@@ -76,7 +76,7 @@ import qualified HexChat.Internal as I
 --
 -- The type parameter signifies the return type of the initializer and has no special meaning otherwise, you can specialize it to anything you want.
 --
--- If you need to pass a lot of data to the deinitializer you could simply let @a ~ IO ()@ and @'modDeinit' = id@, such as in the following:
+-- If you need to pass a lot of data to the deinitializer you could simply let @a ~ 'IO' ()@ and @'modDeinit' = 'id'@, such as in the following:
 --
 -- @
 -- info = 'modInfo'
