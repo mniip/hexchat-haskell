@@ -95,7 +95,7 @@ loadScript sup file = reportException (return True) $ do
 			return True
 
 unloadScript :: Bool -> String -> Ghc Bool
-unloadScript sup file = reportException (return True) $ do
+unloadScript sup file = reportException (return False) $ do
 	mf <- liftIO $ find (\s -> scriptFile s == file) <$> readIORef scripts
 	case mf of
 		Nothing -> if sup then return False else liftIO $ evaluate $ error "No such script"
@@ -110,24 +110,58 @@ deinitScript s = do
 	I.pluginguiRemove plugin $ scriptHandle s
 	finally (modDeinit (scriptInfo s) (scriptNonce s)) $ I.unhookHandle $ scriptHandle s
 
-commandLoad, commandUnload, commandReload :: [String] -> [String] -> Ghc Eat
-commandLoad w we = do
-	let (_:file:_) = w
+commandLoad, commandUnload, commandReload, commandHs :: [String] -> [String] -> Ghc Eat
+commandLoad _ (_:file:_) = do
 	b <- loadScript True file
 	return (if b then EatAll else EatNone)
+commandLoad _ _ = return EatNone
 
-commandUnload w we = do
-	let (_:file:_) = w
+commandUnload _ (_:file:_) = do
 	b <- unloadScript True file
 	return (if b then EatAll else EatNone)
+commandUnload _ _ = return EatNone
 
-commandReload w we = do
-	let (_:file:_) = w
+commandReload _ (_:file:_) = do
 	b <- unloadScript True file
 	if not b then return EatNone
 		else do
 			loadScript False file
 			return EatAll
+commandReload _ _ = return EatNone
+
+commandHsHelp :: String
+commandHsHelp =
+	"Usage: /hs load <filename>\n" ++
+	"           unload <filename>\n" ++
+	"           reload <filename>\n" ++
+	"           list\n"
+
+commandHs (_:"load":_) (_:_:file:_) = do
+	loadScript False file
+	return EatAll
+commandHs (_:"unload":_) (_:_:file:_) = do
+	unloadScript False file
+	return EatAll
+commandHs (_:"reload":_) (_:_:file:_) = do
+	b <- unloadScript False file
+	if not b then return EatAll
+		else do
+			loadScript False file
+			return EatAll
+commandHs (_:"list":_) _ = liftIO $ do
+	ss <- readIORef scripts
+	mapM print $ zipWith4 (\n v f d -> n ++ "  " ++ v ++ "  " ++ f ++ "  " ++ d)
+		(pad $ "Name" : map (modName . scriptInfo) ss)
+		(pad $ "Version" : map (modVersion . scriptInfo) ss)
+		(pad $ "Filename" : map scriptFile ss)
+		("Description" : map (modDescription . scriptInfo) ss)
+	return EatAll
+	where
+		pad xs = let len = maximum $ map length xs
+			in map (\x -> x ++ replicate (len - length x) ' ') xs
+commandHs _ _ = do
+	liftIO $ print commandHsHelp
+	return EatAll
 
 foreign export ccall plugin_init :: I.Plugin_Init
 foreign export ccall plugin_deinit :: I.Plugin_Deinit
@@ -143,9 +177,10 @@ session = unsafePerformIO $ newIORef (error "uninitialized Session")
 plugin_init plugin pname pdesc pver arg = reportException (return 0) $ do
 	I.initStaticData plugin
 
+	let versionStr = showVersion version ++ "/" ++ cProjectVersion
 	name <- newCString "Haskell"
-	desc <- newCString "Haskell scripting plugin"
-	ver <- newCString $ showVersion version ++ "/" ++ cProjectVersion
+	desc <- newCString "Haskell scripting interface"
+	ver <- newCString versionStr
 	modifyIORef borrowedStrings ([name, desc, ver] ++)
 
 	poke pname name
@@ -161,6 +196,9 @@ plugin_init plugin pname pdesc pver arg = reportException (return 0) $ do
 			hookCommand "load" pri_NORM "" $ \w we -> reflectGhc (commandLoad w we) s
 			hookCommand "unload" pri_NORM "" $ \w we -> reflectGhc (commandUnload w we) s
 			hookCommand "reload" pri_NORM "" $ \w we -> reflectGhc (commandReload w we) s
+			hookCommand "hs" pri_NORM commandHsHelp $ \w we -> reflectGhc (commandHs w we) s
+
+			print $ "Haskell interface (" ++ versionStr ++ ") loaded"
 
 		return 1
 
